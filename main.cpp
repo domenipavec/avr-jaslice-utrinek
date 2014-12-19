@@ -35,8 +35,12 @@
 #include <stdint.h>
 
 #include "bitop.h"
+#include "random32.h"
 
 static volatile uint8_t n = 0;
+static volatile uint8_t utrinek_timeout = 5;
+static volatile uint8_t utrinek_timeout_min = 2;
+static volatile uint8_t utrinek_timeout_max = 30;
 static const uint8_t I2C_ADDRESS = 0x40;
 
 static void startUtrinek() {
@@ -45,13 +49,24 @@ static void startUtrinek() {
 	n = 0;
 }
 
+static void calcUtrinek() {
+    utrinek_timeout = utrinek_timeout_min + get_random32(utrinek_timeout_max - utrinek_timeout_min);
+}
+
 int main() {
+    init_random32();
+    calcUtrinek();
+    
 	// init
-	SETBIT(DDRA, PA7);
-	
-	SETBIT(DDRA, PA1);
-	SETBIT(DDRA, PA2);
-	SETBIT(DDRA, PA3);
+    // led enable
+	//SETBIT(DDRA, PA7);
+	// led latch
+	//SETBIT(DDRA, PA1);
+    // led clock
+	//SETBIT(DDRA, PA2);
+    // led data
+	//SETBIT(DDRA, PA3);
+    DDRA = 0b10001110;
 	
 	// timer 1 for advancing led
 	TCCR1B = 0b00001101;
@@ -62,17 +77,10 @@ int main() {
 	TCCR0A = 0b00110001;
 	TCCR0B = 0b010;
 	
-	// usi
-	SETBIT(PORTA, PA6);
-	SETBIT(PORTA, PA4);
-	CLEARBIT(DDRA, PA6);
-	CLEARBIT(DDRA, PA4);
-	USICR = (1<<USISIE)|(1<<USIOIE)|         // Enable Start Condition Interrupt. Disable Overflow Interrupt.
-		(1<<USIWM1)|(0<<USIWM0)|             // Set USI in Two-wire mode. No USI Counter overflow prior
-                                             // to first Start Condition (potentail failure)
-        (1<<USICS1)|(0<<USICS0)|(0<<USICLK)| // Shift Register Clock Source = External, positive edge
-        (0<<USITC);	
-	USISR = 0xF0; // Clear all flags and reset overflow counter
+	// timer 2 for triggering utrinek
+    TCCR2B = 0b00001100;
+    OCR2A = 31250;
+    SETBIT(TIMSK2, OCIE2A);
     
     n = 50;
 	//startUtrinek();
@@ -120,7 +128,7 @@ int main() {
 	}
 }
 
-ISR(TIM1_COMPA_vect) {
+ISR(TIMER1_COMPA_vect) {
 	if (n < 33) {
 		OCR1A -= 0x2;
 		if (n%3 == 2 and n > 9) {
@@ -136,70 +144,10 @@ ISR(TIM1_COMPA_vect) {
 	}
 }
 
-// i2c implementation
-volatile uint8_t i2c_state = 0xff;
-
-static inline void sendAck() {
-	USIDR    =  0;                                              /* Prepare ACK                         */ 
-	SETBIT(DDRA, PA6);                              /* Set SDA as output                   */ 
-	USISR    =  (0<<USISIF)|(1<<USIOIF)|(1<<USIPF)|(1<<USIDC)|  /* Clear all flags, except Start Cond  */ 
-				(0x0F<<USICNT0);                                /* set USI counter to shift 1 bit. */ 
-}
-
-static inline void readData() {
-	CLEARBIT(DDRA,PA6);                       /* Set SDA as intput */                   
-	USISR    =  (0<<USISIF)|(1<<USIOIF)|(1<<USIPF)|(1<<USIDC)|      /* Clear all flags, except Start Cond */ \
-                (0x0<<USICNT0);                                     /* set USI to shift out 8 bits        */ \
-}
-
-ISR(USI_OVF_vect) {
-	static uint8_t dataCount = 0;
-	
-	switch (i2c_state) {
-		case 0:
-			if (( USIDR>>1 ) == I2C_ADDRESS) {
-				if (BITCLEAR(USIDR, 0)) {
-					dataCount = 0;
-					i2c_state = 1;
-					sendAck();
-				} else {
-					i2c_state = 0xff;
-					USISR  =    (1<<USISIF)|(1<<USIOIF)|(1<<USIPF)|(1<<USIDC)|      // Clear flags
-                (0x0<<USICNT0);                                     // Set USI to sample 8 bits i.e. count 16 external pin toggles.
-				}
-			} else {
-				i2c_state = 0xff;
-				USISR  =    (1<<USISIF)|(1<<USIOIF)|(1<<USIPF)|(1<<USIDC)|      // Clear flags
-                (0x0<<USICNT0);                                     // Set USI to sample 8 bits i.e. count 16 external pin toggles.
-			}
-			break;
-		case 1:
-			i2c_state = 2;
-			readData();
-			break;
-		case 2:
-			if (dataCount == 0) {
-				switch (USIDR) {
-					case 0:
-						startUtrinek();
-						break;
-				}
-				dataCount++;
-			}
-			i2c_state = 1;
-			sendAck();
-			break;
-		default:
-			USISR  =    (1<<USISIF)|(1<<USIOIF)|(1<<USIPF)|(1<<USIDC)|      // Clear flags
-               (0x0<<USICNT0);                                     // Set USI to sample 8 bits i.e. count 16 external pin toggles.
-			break;
- 
-	}
-}
-
-ISR(USI_STR_vect) {
-	i2c_state = 0;
-	USISR  =    (1<<USISIF)|(1<<USIOIF)|(1<<USIPF)|(1<<USIDC)|      // Clear flags
-                (0x0<<USICNT0);                                     // Set USI to sample 8 bits i.e. count 16 external pin toggles.
-
+ISR(TIMER2_COMPA_vect) {
+    utrinek_timeout--;
+    if (utrinek_timeout == 0) {
+        calcUtrinek();
+        startUtrinek();
+    }
 }

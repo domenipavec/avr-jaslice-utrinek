@@ -66,7 +66,7 @@
 # Name of target controller 
 # (e.g. 'at90s8515', see the available avr-gcc mmcu 
 # options for possible values)
-MCU=attiny84
+MCU=attiny841
 
 # id to use with programmer
 # default: PROGRAMMER_MCU=$(MCU)
@@ -74,7 +74,7 @@ MCU=attiny84
 # accept the same MCU name as avr-gcc (for example
 # for ATmega8s, avr-gcc expects 'atmega8' and 
 # avrdude requires 'm8')
-PROGRAMMER_MCU=t84
+PROGRAMMER_MCU=t841
 
 # Name of our project
 # (use a single word, e.g. 'myproject')
@@ -89,7 +89,7 @@ FUSE_SETTINGS=-U lfuse:w:0xe2:m -U hfuse:w:0xd7:m -U efuse:w:0xff:m
 # (list all files to compile, e.g. 'a.c b.cpp as.S'):
 # Use .cc, .cpp or .C suffix for C++ files, use .S 
 # (NOT .s !!!) for assembly source code files.
-PRJSRC=main.cpp
+PRJSRC=main.cpp ./avr-cpp-lib/random32.cpp
 
 # additional includes (e.g. -I/path/to/mydir)
 INC=-I./avr-cpp-lib
@@ -99,7 +99,7 @@ LIBS=
 
 # Optimization level, 
 # use s (size opt), 1, 2, 3 or 0 (off)
-OPTLEVEL=3
+OPTLEVEL=0
 
 
 #####      AVR Dude 'writeflash' options       #####

@@ -78,6 +78,7 @@ int main() {
 	// timer 0 for pwm
 	TCCR0A = 0b00110001;
 	TCCR0B = 0b010;
+    TOCPMCOE = 0b01000000;
 	
 	// timer 2 for triggering utrinek
     OCR2A = 31250;

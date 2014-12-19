@@ -45,9 +45,9 @@ static volatile uint8_t utrinek_timeout_min = 5;
 static volatile uint8_t utrinek_timeout_max = 30;
 
 static void startUtrinek() {
-	OCR0B = BIT(7);
-	OCR1A = 0x0100;
-	n = 0;
+    OCR0B = BIT(7);
+    OCR1A = 0x0100;
+    n = 0;
 }
 
 static void calcUtrinek() {
@@ -57,44 +57,44 @@ static void calcUtrinek() {
 int main() {
     init_random32();
     calcUtrinek();
-    
-	// init
+
+    // init
     // led enable
-	//SETBIT(DDRA, PA7);
-	// led latch
-	//SETBIT(DDRA, PA1);
+    //SETBIT(DDRA, PA7);
+    // led latch
+    //SETBIT(DDRA, PA1);
     // led clock
-	//SETBIT(DDRA, PA2);
+    //SETBIT(DDRA, PA2);
     // led data
-	//SETBIT(DDRA, PA3);
+    //SETBIT(DDRA, PA3);
     DDRA = 0b10001110;
-	
-	// timer 1 for advancing led
+
+    // timer 1 for advancing led
     OCR1A = 0x0100;
     TCNT1 = 0;
-	TCCR1B = 0b00001101;
-	SETBIT(TIMSK1, OCIE1A);
-	
-	// timer 0 for pwm
-	TCCR0A = 0b00110001;
-	TCCR0B = 0b010;
+    TCCR1B = 0b00001101;
+    SETBIT(TIMSK1, OCIE1A);
+
+    // timer 0 for pwm
+    TCCR0A = 0b00110001;
+    TCCR0B = 0b010;
     TOCPMCOE = 0b01000000;
-	
-	// timer 2 for triggering utrinek
+
+    // timer 2 for triggering utrinek
     OCR2A = 31250;
     TCNT2 = 0;
     TCCR2B = 0b00001100;
     SETBIT(TIMSK2, OCIE2A);
-    
+
     // init i2c
     TWSCRA = 0b00111000;
     TWSA = I2C_ADDRESS<<1;
 
-	// enable interrupts
-	sei();
+    // enable interrupts
+    sei();
 
-	uint8_t i = 0;
-	for (;;) {
+    uint8_t i = 0;
+    for (;;) {
         if (n < 33) {
             for (uint8_t j = 29-n; j > 0; j--) {
                 SETBIT(PORTA, PA2);
@@ -132,7 +132,7 @@ int main() {
                 i = 0;
             }
         }
-	}
+    }
 }
 
 ISR(TWI_SLAVE_vect) {
@@ -188,19 +188,19 @@ ISR(TWI_SLAVE_vect) {
 }
 
 ISR(TIMER1_COMPA_vect) {
-	if (n < 33) {
-		OCR1A -= 0x2;
-		if (n%3 == 2 and n > 9) {
-			OCR0B >>= 1;
-		}
-		if (n > 10) {
-			OCR1A -= 0x4;
-			if (n > 20 and OCR1A > 0x1F) {
-				OCR1A -= 0xC;
-			}
-		}
-		n++;
-	}
+    if (n < 33) {
+        OCR1A -= 0x2;
+        if (n%3 == 2 and n > 9) {
+            OCR0B >>= 1;
+        }
+        if (n > 10) {
+            OCR1A -= 0x4;
+            if (n > 20 and OCR1A > 0x1F) {
+                OCR1A -= 0xC;
+            }
+        }
+        n++;
+    }
 }
 
 ISR(TIMER2_COMPA_vect) {

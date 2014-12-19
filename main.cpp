@@ -37,11 +37,12 @@
 #include "bitop.h"
 #include "random32.h"
 
-static volatile uint8_t n = 0;
-static volatile uint8_t utrinek_timeout = 5;
-static volatile uint8_t utrinek_timeout_min = 2;
-static volatile uint8_t utrinek_timeout_max = 30;
 static const uint8_t I2C_ADDRESS = 0x40;
+
+static volatile uint8_t n = 33;
+static volatile uint8_t utrinek_timeout;
+static volatile uint8_t utrinek_timeout_min = 5;
+static volatile uint8_t utrinek_timeout_max = 30;
 
 static void startUtrinek() {
 	OCR0B = BIT(7);
@@ -69,8 +70,9 @@ int main() {
     DDRA = 0b10001110;
 	
 	// timer 1 for advancing led
+    OCR1A = 0x0100;
+    TCNT1 = 0;
 	TCCR1B = 0b00001101;
-    OCR1A = 0x0200;
 	SETBIT(TIMSK1, OCIE1A);
 	
 	// timer 0 for pwm
@@ -78,54 +80,110 @@ int main() {
 	TCCR0B = 0b010;
 	
 	// timer 2 for triggering utrinek
-    TCCR2B = 0b00001100;
     OCR2A = 31250;
+    TCNT2 = 0;
+    TCCR2B = 0b00001100;
     SETBIT(TIMSK2, OCIE2A);
     
-    n = 50;
-	//startUtrinek();
+    // init i2c
+    TWSCRA = 0b00111000;
+    TWSA = I2C_ADDRESS<<1;
 
 	// enable interrupts
 	sei();
 
 	uint8_t i = 0;
 	for (;;) {
-		for (uint8_t j = 29-n; j > 0; j--) {
-			SETBIT(PORTA, PA2);
-			CLEARBIT(PORTA, PA2);
-		}
-		
-		SETBIT(PORTA, PA3);
-		SETBIT(PORTA, PA2);
-		CLEARBIT(PORTA, PA2);
-		
-		if (i>2) {
-			CLEARBIT(PORTA, PA3);
-		}
-		SETBIT(PORTA, PA2);
-		CLEARBIT(PORTA, PA2);
-		
-		if (i>0) {
-			CLEARBIT(PORTA, PA3);
-		}
-		SETBIT(PORTA, PA2);
-		CLEARBIT(PORTA, PA2);
-		
-		CLEARBIT(PORTA, PA3);
-		for (uint8_t j = n; j > 0; j--) {
-			SETBIT(PORTA, PA2);
-			CLEARBIT(PORTA, PA2);
-		}
+        if (n < 33) {
+            for (uint8_t j = 29-n; j > 0; j--) {
+                SETBIT(PORTA, PA2);
+                CLEARBIT(PORTA, PA2);
+            }
+            
+            SETBIT(PORTA, PA3);
+            SETBIT(PORTA, PA2);
+            CLEARBIT(PORTA, PA2);
+            
+            if (i>2) {
+                CLEARBIT(PORTA, PA3);
+            }
+            SETBIT(PORTA, PA2);
+            CLEARBIT(PORTA, PA2);
+            
+            if (i>0) {
+                CLEARBIT(PORTA, PA3);
+            }
+            SETBIT(PORTA, PA2);
+            CLEARBIT(PORTA, PA2);
+            
+            CLEARBIT(PORTA, PA3);
+            for (uint8_t j = n; j > 0; j--) {
+                SETBIT(PORTA, PA2);
+                CLEARBIT(PORTA, PA2);
+            }
 
-		// latch
-		SETBIT(PORTA, PA1);
-		CLEARBIT(PORTA, PA1);
+            // latch
+            SETBIT(PORTA, PA1);
+            CLEARBIT(PORTA, PA1);
 
-		i++;
-		if (i > 32) {
-			i = 0;
-		}
+            i++;
+            if (i > 32) {
+                i = 0;
+            }
+        }
 	}
+}
+
+ISR(TWI_SLAVE_vect) {
+    static uint8_t state;
+    static uint8_t command;
+    if (BITSET(TWSSRA, TWASIF)) {
+        // received address/stop
+        if (BITSET(TWSSRA, TWAS)) {
+            // received address
+            if (BITSET(TWSSRA, TWDIR)) {
+                // read operation
+                TWSCRB = 0b00000110;
+            } else {
+                // write operation
+                state = 0;
+                TWSCRB = 0b00000011;
+            }
+        } else {
+            // received stop
+            TWSCRB = 0b00000010;
+        }
+    } else if (BITSET(TWSSRA, TWDIF)) {
+        // received data
+        if (state == 0) {
+            command = TWSD;
+            state++;
+            if (TWSD == 0) {
+                startUtrinek();
+            }
+        } else {
+            if (command == 1) {
+                utrinek_timeout_min = TWSD;
+                if (utrinek_timeout_min == 0)  {
+                    utrinek_timeout_min = 1;
+                } else if (utrinek_timeout_min == 0xff) {
+                    utrinek_timeout_min = 0xfe;
+                }
+            } else if (command == 2) {
+                utrinek_timeout_max = TWSD;
+            }
+            if (utrinek_timeout_max <= utrinek_timeout_min) {
+                utrinek_timeout_max = utrinek_timeout_min + 1;
+            }
+            if (utrinek_timeout > utrinek_timeout_max) {
+                utrinek_timeout = utrinek_timeout_max;
+            }
+        }
+        
+        TWSCRB = 0b00000011;
+    } else {
+        TWSCRB = 0b00000111;
+    }
 }
 
 ISR(TIMER1_COMPA_vect) {

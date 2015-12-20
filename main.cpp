@@ -23,26 +23,22 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
- 
+
  #define F_CPU 8000000UL  // 8 MHz
 //#include <util/delay.h>
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
 //#include <avr/pgmspace.h>
-//#include <avr/eeprom.h> 
+//#include <avr/eeprom.h>
 
 #include <stdint.h>
 
 #include "bitop.h"
-#include "random32.h"
 
 static const uint8_t I2C_ADDRESS = 0x40;
 
 static volatile uint8_t n = 33;
-static volatile uint8_t utrinek_timeout;
-static volatile uint8_t utrinek_timeout_min = 5;
-static volatile uint8_t utrinek_timeout_max = 30;
 
 static void startUtrinek() {
     OCR0B = BIT(7);
@@ -50,14 +46,7 @@ static void startUtrinek() {
     n = 0;
 }
 
-static void calcUtrinek() {
-    utrinek_timeout = utrinek_timeout_min + get_random32(utrinek_timeout_max - utrinek_timeout_min);
-}
-
 int main() {
-    init_random32();
-    calcUtrinek();
-
     // init
     // led enable
     //SETBIT(DDRA, PA7);
@@ -80,12 +69,6 @@ int main() {
     TCCR0B = 0b010;
     TOCPMCOE = 0b01000000;
 
-    // timer 2 for triggering utrinek
-    OCR2A = 31250;
-    TCNT2 = 0;
-    TCCR2B = 0b00001100;
-    SETBIT(TIMSK2, OCIE2A);
-
     // init i2c
     TWSCRA = 0b00111000;
     TWSA = I2C_ADDRESS<<1;
@@ -100,23 +83,23 @@ int main() {
                 SETBIT(PORTA, PA2);
                 CLEARBIT(PORTA, PA2);
             }
-            
+
             SETBIT(PORTA, PA3);
             SETBIT(PORTA, PA2);
             CLEARBIT(PORTA, PA2);
-            
+
             if (i>2) {
                 CLEARBIT(PORTA, PA3);
             }
             SETBIT(PORTA, PA2);
             CLEARBIT(PORTA, PA2);
-            
+
             if (i>0) {
                 CLEARBIT(PORTA, PA3);
             }
             SETBIT(PORTA, PA2);
             CLEARBIT(PORTA, PA2);
-            
+
             CLEARBIT(PORTA, PA3);
             for (uint8_t j = n; j > 0; j--) {
                 SETBIT(PORTA, PA2);
@@ -162,25 +145,8 @@ ISR(TWI_SLAVE_vect) {
             if (TWSD == 0) {
                 startUtrinek();
             }
-        } else {
-            if (command == 1) {
-                utrinek_timeout_min = TWSD;
-                if (utrinek_timeout_min == 0)  {
-                    utrinek_timeout_min = 1;
-                } else if (utrinek_timeout_min == 0xff) {
-                    utrinek_timeout_min = 0xfe;
-                }
-            } else if (command == 2) {
-                utrinek_timeout_max = TWSD;
-            }
-            if (utrinek_timeout_max <= utrinek_timeout_min) {
-                utrinek_timeout_max = utrinek_timeout_min + 1;
-            }
-            if (utrinek_timeout > utrinek_timeout_max) {
-                utrinek_timeout = utrinek_timeout_max;
-            }
         }
-        
+
         TWSCRB = 0b00000011;
     } else {
         TWSCRB = 0b00000111;
@@ -200,13 +166,5 @@ ISR(TIMER1_COMPA_vect) {
             }
         }
         n++;
-    }
-}
-
-ISR(TIMER2_COMPA_vect) {
-    utrinek_timeout--;
-    if (utrinek_timeout == 0) {
-        calcUtrinek();
-        startUtrinek();
     }
 }

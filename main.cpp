@@ -24,7 +24,7 @@
  * SOFTWARE.
  */
 
- #define F_CPU 8000000UL  // 8 MHz
+#define F_CPU 8000000UL  // 8 MHz
 //#include <util/delay.h>
 
 #include <avr/io.h>
@@ -41,130 +41,144 @@ static const uint8_t I2C_ADDRESS = 0x40;
 static volatile uint8_t n = 33;
 
 static void startUtrinek() {
-    OCR0B = BIT(7);
-    OCR1A = 0x0100;
-    n = 0;
+	OCR0B = BIT(7);
+	OCR1A = 0x0100;
+	n = 0;
+}
+
+static const uint8_t LED_ENABLE_PIN = PA7;
+static const uint8_t LED_LATCH_PIN = PA1;
+static const uint8_t LED_CLOCK_PIN = PA2;
+static const uint8_t LED_DATA_PIN = PA3;
+static volatile uint8_t * const LED_ENABLE_PORT = &PORTA;
+static volatile uint8_t * const LED_LATCH_PORT = &PORTA;
+static volatile uint8_t * const LED_CLOCK_PORT = &PORTA;
+static volatile uint8_t * const LED_DATA_PORT = &PORTA;
+static volatile uint8_t * const LED_ENABLE_DDR = &DDRA;
+static volatile uint8_t * const LED_LATCH_DDR = &DDRA;
+static volatile uint8_t * const LED_CLOCK_DDR = &DDRA;
+static volatile uint8_t * const LED_DATA_DDR = &DDRA;
+
+static inline void led_toggle_clock() {
+	SETBIT(*LED_CLOCK_PORT, LED_CLOCK_PIN);
+	CLEARBIT(*LED_CLOCK_PORT, LED_CLOCK_PIN);
+}
+
+static inline void led_toggle_latch() {
+	SETBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
+	CLEARBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
 }
 
 int main() {
-    // init
-    // led enable
-    //SETBIT(DDRA, PA7);
-    // led latch
-    //SETBIT(DDRA, PA1);
-    // led clock
-    //SETBIT(DDRA, PA2);
-    // led data
-    //SETBIT(DDRA, PA3);
-    DDRA = 0b10001110;
+	// init
+	SETBIT(*LED_ENABLE_DDR, LED_ENABLE_PIN);
+	SETBIT(*LED_LATCH_DDR, LED_LATCH_PIN);
+	SETBIT(*LED_CLOCK_DDR, LED_CLOCK_PIN);
+	SETBIT(*LED_DATA_DDR, LED_DATA_PIN);
 
-    // timer 1 for advancing led
-    OCR1A = 0x0100;
-    TCNT1 = 0;
-    TCCR1B = 0b00001101;
-    SETBIT(TIMSK1, OCIE1A);
+	// timer 1 for advancing led
+	OCR1A = 0x0100;
+	TCNT1 = 0;
+	TCCR1B = 0b00001101;
+	SETBIT(TIMSK1, OCIE1A);
 
-    // timer 0 for pwm
-    TCCR0A = 0b00110001;
-    TCCR0B = 0b010;
-    TOCPMCOE = 0b01000000;
+	// timer 0 for pwm
+	TCCR0A = 0b00110001;
+	TCCR0B = 0b010;
+	TOCPMCOE = 0b01000000;
 
-    // init i2c
-    TWSCRA = 0b00111000;
-    TWSA = I2C_ADDRESS<<1;
+	// init i2c
+	TWSCRA = 0b00111000;
+	TWSA = I2C_ADDRESS<<1;
 
-    // enable interrupts
-    sei();
+	// enable interrupts
+	sei();
 
-    uint8_t i = 0;
-    for (;;) {
-        if (n < 33) {
-            for (uint8_t j = 29-n; j > 0; j--) {
-                SETBIT(PORTA, PA2);
-                CLEARBIT(PORTA, PA2);
-            }
+	startUtrinek();
 
-            SETBIT(PORTA, PA3);
-            SETBIT(PORTA, PA2);
-            CLEARBIT(PORTA, PA2);
+	uint8_t i = 0;
+	for (;;) {
+		if (n < 33) {
+			for (uint8_t j = 29-n; j > 0; j--) {
+				led_toggle_clock();
+			}
 
-            if (i>2) {
-                CLEARBIT(PORTA, PA3);
-            }
-            SETBIT(PORTA, PA2);
-            CLEARBIT(PORTA, PA2);
+			SETBIT(*LED_DATA_PORT, LED_DATA_PIN);
+			led_toggle_clock();
 
-            if (i>0) {
-                CLEARBIT(PORTA, PA3);
-            }
-            SETBIT(PORTA, PA2);
-            CLEARBIT(PORTA, PA2);
+			if (i>2) {
+				CLEARBIT(*LED_DATA_PORT, LED_DATA_PIN);
+			}
+			led_toggle_clock();
 
-            CLEARBIT(PORTA, PA3);
-            for (uint8_t j = n; j > 0; j--) {
-                SETBIT(PORTA, PA2);
-                CLEARBIT(PORTA, PA2);
-            }
+			if (i>0) {
+				CLEARBIT(*LED_DATA_PORT, LED_DATA_PIN);
+			}
+			led_toggle_clock();
 
-            // latch
-            SETBIT(PORTA, PA1);
-            CLEARBIT(PORTA, PA1);
+			CLEARBIT(*LED_DATA_PORT, LED_DATA_PIN);
+			for (uint8_t j = n; j > 0; j--) {
+				led_toggle_clock();
+			}
 
-            i++;
-            if (i > 32) {
-                i = 0;
-            }
-        }
-    }
+			// latch
+			led_toggle_latch();
+
+			i++;
+			if (i > 32) {
+				i = 0;
+			}
+		}
+	}
 }
 
 ISR(TWI_SLAVE_vect) {
-    static uint8_t state;
-    static uint8_t command;
-    if (BITSET(TWSSRA, TWASIF)) {
-        // received address/stop
-        if (BITSET(TWSSRA, TWAS)) {
-            // received address
-            if (BITSET(TWSSRA, TWDIR)) {
-                // read operation
-                TWSCRB = 0b00000110;
-            } else {
-                // write operation
-                state = 0;
-                TWSCRB = 0b00000011;
-            }
-        } else {
-            // received stop
-            TWSCRB = 0b00000010;
-        }
-    } else if (BITSET(TWSSRA, TWDIF)) {
-        // received data
-        if (state == 0) {
-            command = TWSD;
-            state++;
-            if (TWSD == 0) {
-                startUtrinek();
-            }
-        }
+	static uint8_t state;
+	static uint8_t command;
+	if (BITSET(TWSSRA, TWASIF)) {
+		// received address/stop
+		if (BITSET(TWSSRA, TWAS)) {
+			// received address
+			if (BITSET(TWSSRA, TWDIR)) {
+				// read operation
+				TWSCRB = 0b00000110;
+			} else {
+				// write operation
+				state = 0;
+				TWSCRB = 0b00000011;
+			}
+		} else {
+			// received stop
+			TWSCRB = 0b00000010;
+		}
+	} else if (BITSET(TWSSRA, TWDIF)) {
+		// received data
+		if (state == 0) {
+			command = TWSD;
+			state++;
+			if (command == 0) {
+				startUtrinek();
+			}
+		}
 
-        TWSCRB = 0b00000011;
-    } else {
-        TWSCRB = 0b00000111;
-    }
+		TWSCRB = 0b00000011;
+	} else {
+		TWSCRB = 0b00000111;
+	}
 }
 
 ISR(TIMER1_COMPA_vect) {
-    if (n < 33) {
-        OCR1A -= 0x2;
-        if (n%3 == 2 and n > 9) {
-            OCR0B >>= 1;
-        }
-        if (n > 10) {
-            OCR1A -= 0x4;
-            if (n > 20 and OCR1A > 0x1F) {
-                OCR1A -= 0xC;
-            }
-        }
-        n++;
-    }
+	if (n < 33) {
+		OCR1A -= 0x2;
+		if (n%3 == 2 and n > 9) {
+			OCR0B >>= 1;
+		}
+		if (n > 10) {
+			OCR1A -= 0x4;
+			if (n > 20 and OCR1A > 0x1F) {
+				OCR1A -= 0xC;
+			}
+		}
+		n++;
+	}
 }

@@ -64,11 +64,6 @@ static inline void led_toggle_clock() {
 	CLEARBIT(*LED_CLOCK_PORT, LED_CLOCK_PIN);
 }
 
-static inline void led_toggle_latch() {
-	SETBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
-	CLEARBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
-}
-
 int main() {
 	// init
 	SETBIT(*LED_ENABLE_DDR, LED_ENABLE_PIN);
@@ -83,8 +78,10 @@ int main() {
 	SETBIT(TIMSK1, OCIE1A);
 
 	// timer 0 for pwm
-	TCCR0A = 0b00110001;
-	TCCR0B = 0b010;
+	// pwm phase correct, set OC0B on up, clear on down
+	TCCR0A = BIT(COM0B1) | BIT(COM0B0) | BIT(WGM00);
+	// 15kHz pwm
+	TCCR0B = BIT(CS00);
 	TOCPMCOE = 0b01000000;
 
 	// init i2c
@@ -121,8 +118,13 @@ int main() {
 				led_toggle_clock();
 			}
 
+			// synchronize on pwm
+			while (BITCLEAR(TIFR0, TOV0));
+			SETBIT(TIFR0, TOV0);
+
 			// latch
-			led_toggle_latch();
+			SETBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
+			CLEARBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
 
 			i++;
 			if (i > 32) {

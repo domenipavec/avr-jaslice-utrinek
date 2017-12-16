@@ -117,21 +117,24 @@ int main() {
 	// pull up for active indicator
 	SETBIT(PUEA, PA3);
 
+	// pull up for uart receive line
+	SETBIT(PUEA, PA2);
+
 	// led test
-	SETBIT(*LED_DATA_PORT, LED_DATA_PIN);
-	for (uint8_t i = 0; i < 33; i++) {
-		SETBIT(*LED_CLOCK_PORT, LED_CLOCK_PIN);
-		CLEARBIT(*LED_CLOCK_PORT, LED_CLOCK_PIN);
-
-		SETBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
-		CLEARBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
-
-		CLEARBIT(*LED_DATA_PORT, LED_DATA_PIN);
-
-		for (uint8_t j = 0; j < 255; j++) {
-			_delay_ms(1);
-		}
-	}
+	// SETBIT(*LED_DATA_PORT, LED_DATA_PIN);
+	// for (uint8_t i = 0; i < 33; i++) {
+	//     SETBIT(*LED_CLOCK_PORT, LED_CLOCK_PIN);
+	//     CLEARBIT(*LED_CLOCK_PORT, LED_CLOCK_PIN);
+    //
+	//     SETBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
+	//     CLEARBIT(*LED_LATCH_PORT, LED_LATCH_PIN);
+    //
+	//     CLEARBIT(*LED_DATA_PORT, LED_DATA_PIN);
+    //
+	//     for (uint8_t j = 0; j < 255; j++) {
+	//         _delay_ms(1);
+	//     }
+	// }
 
 	// read eeprom
 	ADDRESS = eeprom_read_byte(&address_eeprom);
